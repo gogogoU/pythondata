@@ -47,7 +47,7 @@ users = {"Angelica": {"Blues Traveler": 3.5, "Broken Bells": 2.0,
          }
 
 
-class recommender:
+class Recommender:
     def __init__(self, data, k=1, metric='pearson', n=5):
         """ initialize recommender
         currently, if data is dictionary the recommender is initialized
@@ -375,19 +375,92 @@ class recommender:
                 dem2 += ((ratings[item2] - avg) ** 2)
         return num / (sqrt(dem1) * sqrt(dem2))
 
-    def genArrayForSlopeOne(self, item1, item2, userRatings):
+    def genCosinForMatrix(self):
+        averages = {}
+        userRatings = self.data
+        for (user, ratings) in userRatings.items():
+            averages[user] = float(sum(ratings.values())) / len(ratings.values())
+
+        for (user, ratings) in userRatings.items():
+            for (item1, rating) in ratings.items():
+                self.deviations.setdefault(item1, {})
+                for (item2, someone) in ratings.items():
+                    if item1 != item2:
+                        self.deviations[item1].setdefault(item2, {"num": 0.0, "dem1": 0.0, "dem2": 0.0})
+                        if item1 in ratings and item2 in ratings:
+                            self.deviations[item1][item2]["num"] += ((ratings[item1] - averages[user]) * (ratings[item2] - averages[user]))
+                            self.deviations[item1][item2]["dem1"] += ((ratings[item1] - averages[user]) ** 2)
+                            self.deviations[item1][item2]["dem2"] += ((ratings[item2] - averages[user]) ** 2)
+        #print(self.deviations)
+        for (item1, ratings) in self.deviations.items():
+            for (item2, rating) in ratings.items():
+                self.deviations[item1][item2] =  self.deviations[item1][item2]["num"] / (sqrt(self.deviations[item1][item2]["dem1"])  * sqrt(self.deviations[item1][item2]["dem2"]))
+        #print(averages)
+        #print(self.deviations)
+
+    def predictValueByCosin(self, userRatings):
+        numerator = 0
+        denominator = 0
+        print(self.deviations)
+        recommender = {}
+        for (nameless, rating) in userRatings.items():
+            for (item, ratings) in self.deviations.items():
+                if nameless in ratings  and item not in userRatings:
+                    recommender.setdefault(item, {"numerator": 0, "denominator": 0})
+                    recommender[item]["numerator"] += (self.deviations[item][nameless] * self.normalization(rating, 5, 1))
+                    recommender[item]["denominator"] += abs(self.deviations[item][nameless])
+
+        for (key, value) in recommender.items():
+            recommender[key] =  self.unnormalization(recommender[key]["numerator"] / recommender[key]["denominator"], 5, 1)
+        #recommender.sort(reverse = True)
+        print(recommender)
+
+    def genMatrixForSlopeOne(self):
         for ratings in self.data.values():
             for (item, rating) in ratings.items():
                 self.frequencies.setdefault(item, {})
                 self.deviations.setdefault(item, {})
                 for (item_, ratings_) in ratings.items():
                     if item_ != item:
-                        self.frequencies[item].setdefault(item_, {})
-                        self.deviations[item].setdefault(item_, {})
+                        self.frequencies[item].setdefault(item_, 0)
+                        self.deviations[item].setdefault(item_, 0)
                         self.frequencies[item][item_] += 1
                         self.deviations[item][item_] += (rating - ratings_)
-
-        for (key, value) in self.deviations:
-            for (key1, value1) in self.deviations[key]:
+        for (key, value) in self.deviations.items():
+            for (key1, value1) in self.deviations[key].items():
                 self.deviations[key][key1] /= self.frequencies[key][key1]
+        #print("deviations")
+        #print(self.deviations)
+        #print("frequencies")
+        #print(self.frequencies)
 
+    def predictValueBySlopeOne(self, userRatings):
+        numerator = 0
+        denominator = 0
+        #print(self.deviations)
+        recommender = {}
+        for (nameless, rating) in userRatings.items():
+            for (item, ratings) in self.deviations.items():
+                if nameless in ratings  and item not in userRatings:
+                    recommender.setdefault(item, {"frequencies": 0, "deviations": 0.0})
+                    recommender[item]["frequencies"] += self.frequencies[item][nameless]
+                    recommender[item]["deviations"] += (self.deviations[item][nameless] + userRatings[nameless]) * self.frequencies[item][nameless]
+
+        print(recommender)
+        recommenders = [(k, v["deviations"] / v["frequencies"]) for (k, v) in recommender.items()]
+        print(recommenders)
+
+    def normalization(self, oriNum, maxNum, minNum):
+        return (2 * (oriNum - minNum) - (maxNum - minNum)) / (maxNum - minNum)
+
+
+    def unnormalization(self, oriNum, maxNum, minNum):
+        return  ((oriNum + 1) * (maxNum - minNum)) / 2 + minNum
+
+r = Recommender(users2)
+r.genCosinForMatrix()
+r.predictValueByCosin(users2["Ben"])
+
+#r = Recommender(users2)
+#r.genMatrixForSlopeOne()
+#r.predictValueBySlopeOne(users2["Ben"])
